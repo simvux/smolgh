@@ -53,7 +53,7 @@ Config(
 
 Go to your repository and create a webhook in `Settings -> Webhooks -> Add webhook`
 
-Change the `Payload URL` to the server where your `smolgh` instance is running.
+Change the `Payload URL` to the server where your `smolgh` instance is running `https://<your-domain>.com/cicd`
 
 Change the `Content type` to `application/json`
 
@@ -90,6 +90,7 @@ Push scripts receive these environment variables:
 - Add ssh/webview for observing the output of scripts without checking `smolgh`s stdout/stderr
 - Create various templates and example setups for common use-cases
 - Figure out how to use a custom `tracing` subscriber without messing up the stdout output of `Rocket`
+- Support skipping scripts depending on the result of other scripts
 
 ## License
 
