@@ -1,0 +1,5 @@
+Config(
+    port: 7818,
+    secret: "<WEBHOOK-SECRET>",
+    runtime_directory: "workdir"
+)

@@ -1,0 +1,15 @@
+[package]
+name = "smolgh"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+git2 = { version = "0.21.0", features = ["https", "ssh"] }
+hex = "0.4.3"
+hmac = "0.13.0"
+rocket = { version = "0.5.1", features = ["http2", "json"] }
+ron = "0.12.1"
+serde = "1.0.228"
+serde_json = "1.0.150"
+sha2 = "0.11.0"
+tracing = "0.1.44"
