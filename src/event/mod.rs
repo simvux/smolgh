@@ -91,8 +91,8 @@ impl EventChannels {
 
         let key = self
             .private_ssh_key
-            .clone()
-            .map(|key| (key, self.private_ssh_key_pw.clone()));
+            .as_ref()
+            .map(|key| (key.as_str(), self.private_ssh_key_pw.as_deref()));
 
         let repository = match repo::open_or_clone(&path, key, ssh_url, https_url) {
             Ok(repo) => repo::OpenRepository::new(repo, path),
@@ -116,8 +116,8 @@ impl EventChannels {
     pub fn send_push(&self, repo: Repository<'_>, body: repo::Push) -> Status {
         self.with_repo_sender(repo, |sender| match sender.send(repo::Event::Push(body)) {
             Ok(()) => Status::Ok,
-            Err(_) => {
-                eprintln!("repository channel error");
+            Err(error) => {
+                eprintln!("repository channel error: {error}");
                 Status::InternalServerError
             }
         })

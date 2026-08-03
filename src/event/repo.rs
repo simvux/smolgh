@@ -37,7 +37,7 @@ struct Commit {
 pub fn open_or_clone(
     // TODO: Cleanup how we handle credentials
     dir: &Path,
-    privkey: Option<(String, Option<String>)>,
+    privkey: Option<(&str, Option<&str>)>,
     ssh_url: String,
     https_url: String,
 ) -> Result<git::Repository, String> {
@@ -59,15 +59,15 @@ pub fn open_or_clone(
                 let mut callbacks = RemoteCallbacks::new();
                 callbacks.credentials(move |_url, username_from_url, _allowed_types| {
                     git::Cred::ssh_key_from_memory(
-                        username_from_url.unwrap_or(""),
+                        username_from_url.unwrap(),
                         None,
                         &key,
                         pw.as_deref(),
                     )
                 });
 
-                // git::Repository::clone(ssh, git_directory);
                 let mut fo = git::FetchOptions::new();
+                fo.depth(1);
                 fo.remote_callbacks(callbacks);
 
                 let mut builder = git::build::RepoBuilder::new();
