@@ -6,6 +6,7 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::mpsc;
+use tracing::info;
 
 pub enum Event {
     Push(Push),
@@ -34,14 +35,43 @@ struct Commit {
     url: String,
 }
 
+pub struct Auth {
+    key_private: String,
+    key_password: Option<String>,
+}
+
+impl Auth {
+    pub fn new(key: String, pw: Option<String>) -> Self {
+        Self {
+            key_private: key,
+            key_password: pw,
+        }
+    }
+
+    fn remote_callbacks(&self) -> RemoteCallbacks<'_> {
+        let mut callbacks = RemoteCallbacks::new();
+        callbacks.credentials(move |_url, username_from_url, _allowed_types| {
+            git::Cred::ssh_key_from_memory(
+                username_from_url.unwrap(),
+                None,
+                &self.key_private,
+                self.key_password.as_deref(),
+            )
+        });
+
+        callbacks
+    }
+}
+
 pub fn open_or_clone(
-    // TODO: Cleanup how we handle credentials
     dir: &Path,
-    privkey: Option<(&str, Option<&str>)>,
-    ssh_url: String,
-    https_url: String,
+    auth: Option<&Auth>,
+    ssh_url: &str,
+    https_url: &str,
 ) -> Result<git::Repository, String> {
     if dir.exists() {
+        println!("directory exists");
+
         match git::Repository::open(&dir) {
             Ok(repository) => Ok(repository),
             Err(error) => Err(format!(
@@ -52,31 +82,17 @@ pub fn open_or_clone(
     } else {
         let mut used_url = &https_url;
 
-        let creation = match privkey {
-            Some((key, pw)) => {
-                used_url = &ssh_url;
+        let mut fo = git::FetchOptions::new();
+        fo.depth(1);
 
-                let mut callbacks = RemoteCallbacks::new();
-                callbacks.credentials(move |_url, username_from_url, _allowed_types| {
-                    git::Cred::ssh_key_from_memory(
-                        username_from_url.unwrap(),
-                        None,
-                        &key,
-                        pw.as_deref(),
-                    )
-                });
+        if let Some(callbacks) = auth.as_deref().map(Auth::remote_callbacks) {
+            used_url = &ssh_url;
+            fo.remote_callbacks(callbacks);
+        }
 
-                let mut fo = git::FetchOptions::new();
-                fo.depth(1);
-                fo.remote_callbacks(callbacks);
-
-                let mut builder = git::build::RepoBuilder::new();
-                builder.fetch_options(fo);
-
-                builder.clone(&ssh_url, &dir)
-            }
-            None => git::Repository::clone(&https_url, &dir),
-        };
+        let creation = git::build::RepoBuilder::new()
+            .fetch_options(fo)
+            .clone(used_url, dir);
 
         match creation {
             Ok(repository) => Ok(repository),
@@ -110,6 +126,7 @@ pub fn task(mut repository: OpenRepository, resc: mpsc::Receiver<Event>) {
 }
 
 pub struct OpenRepository {
+    auth: Option<Auth>,
     repo: git::Repository,
     path: PathBuf,
 }
@@ -124,8 +141,8 @@ fn leading_number(name: &OsStr) -> Option<i64> {
 }
 
 impl OpenRepository {
-    pub fn new(repo: git::Repository, path: PathBuf) -> Self {
-        Self { repo, path }
+    pub fn new(repo: git::Repository, path: PathBuf, auth: Option<Auth>) -> Self {
+        Self { repo, path, auth }
     }
 
     fn get_scripts_in(&self, path: &Path) -> Result<Vec<(Option<i64>, PathBuf)>, io::Error> {
@@ -162,6 +179,23 @@ impl OpenRepository {
         let branch_name = push.r#ref.split('/').last().unwrap();
 
         let mut remote = self.repo.find_remote("origin").unwrap();
+        let mut connection = None;
+
+        let remote = match self.auth.as_ref() {
+            Some(auth) => {
+                info!("adding credentials for git fetch");
+
+                let callbacks = auth.remote_callbacks();
+                connection = Some(
+                    remote
+                        .connect_auth(git2::Direction::Fetch, Some(callbacks), None)
+                        .unwrap(),
+                );
+
+                connection.as_mut().unwrap().remote()
+            }
+            None => &mut remote,
+        };
 
         remote
             .fetch(&[branch_name], None, None)

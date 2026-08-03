@@ -89,13 +89,13 @@ impl EventChannels {
         let ssh_url = repo.ssh_url.to_string();
         let https_url = repo.clone_url.to_string();
 
-        let key = self
+        let auth = self
             .private_ssh_key
-            .as_ref()
-            .map(|key| (key.as_str(), self.private_ssh_key_pw.as_deref()));
+            .clone()
+            .map(|key| repo::Auth::new(key, self.private_ssh_key_pw.clone()));
 
-        let repository = match repo::open_or_clone(&path, key, ssh_url, https_url) {
-            Ok(repo) => repo::OpenRepository::new(repo, path),
+        let repository = match repo::open_or_clone(&path, auth.as_ref(), &ssh_url, &https_url) {
+            Ok(repo) => repo::OpenRepository::new(repo, path, auth),
             Err(error) => {
                 eprintln!("failed to open or create git repository: {error}");
                 return Status::InternalServerError;
